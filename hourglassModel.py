@@ -72,7 +72,7 @@ class HourglassModel():
         self.nLow = nLow
         self.dataset = dataset
         self.cpu = '/cpu:0'
-        self.gpu = ['/gpu:0', '/gpu:1']
+        self.gpu = ['/gpu:0']
         self.logdir_train = logdir_train
         self.logdir_test = logdir_test
         self.joints = joints
@@ -146,7 +146,7 @@ class HourglassModel():
                 graphTime = time.time()
                 print('---Graph : Done (' + str(int(abs(graphTime - inputTime))) + ' sec.)')
                 with tf.name_scope('loss'):
-                    self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.output, labels=self.gtMaps),name='cross_entropy_loss')
+                    self.loss = tf.losses.mean_squared_error(labels=self.gtMaps, predictions=self.output, name='cross_entropy_loss')
                 lossTime = time.time()
                 print('---Loss : Done (' + str(int(abs(graphTime - lossTime))) + ' sec.)')
         with tf.device(self.cpu):
