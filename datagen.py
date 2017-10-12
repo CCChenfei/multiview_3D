@@ -92,7 +92,7 @@ class DataGenerator():
             remove_joints		: Joints List to keep (See documentation)
         """
         if joints_name == None:
-            self.joints_list = ['r_anckle', 'r_knee', 'r_hip', 'l_hip', 'l_knee', 'l_anckle', 'neck', 'head', 'r_wrist', 'r_elbow', 'r_shoulder', 'l_shoulder', 'l_elbow', 'l_wrist']
+            self.joints_list = ['head', 'neck', 'r_shoulder', 'l_shoulder', 'r_elbow',  'l_elbow', 'r_wrist', 'l_wrist', 'r_hip', 'l_hip', 'r_knee', 'l_knee', 'r_anckle', 'l_anckle']
         else:
             self.joints_list = joints_name
         self.toReduce = False
@@ -222,9 +222,9 @@ class DataGenerator():
             x0 = width // 2
             y0 = height // 2
         else:
-            x0 = center[0]
-            y0 = center[1]
-        return np.exp(-4 * np.log(2) * ((x - x0) ** 2 + (y - y0) ** 2) / sigma ** 2)
+            x0 = center[0]*64/256
+            y0 = center[1]*64/256
+        return np.exp(-0.5* ((x - x0) ** 2 + (y - y0) ** 2) / sigma ** 2)
 
     def _generate_hm(self, height, width, joints, s, weight):
         """ Generate a full Heap Map for every joints in an array

@@ -72,7 +72,7 @@ class HourglassModel():
         self.nLow = nLow
         self.dataset = dataset
         self.cpu = '/cpu:0'
-        self.gpu = ['/gpu:0']
+        self.gpu = ['/gpu:0','/gpu:1']
         self.logdir_train = logdir_train
         self.logdir_test = logdir_test
         self.joints = joints
@@ -146,7 +146,7 @@ class HourglassModel():
                 graphTime = time.time()
                 print('---Graph : Done (' + str(int(abs(graphTime - inputTime))) + ' sec.)')
                 with tf.name_scope('loss'):
-                    self.loss = tf.losses.mean_squared_error(labels=self.gtMaps, predictions=self.output, name='cross_entropy_loss')
+                    self.loss = tf.losses.mean_squared_error(labels=self.gtMaps, predictions=self.output)
                 lossTime = time.time()
                 print('---Loss : Done (' + str(int(abs(graphTime - lossTime))) + ' sec.)')
         with tf.device(self.cpu):
@@ -241,7 +241,7 @@ class HourglassModel():
                     else:
                         _, c, = self.Session.run([self.train_rmsprop, self.loss],feed_dict={self.img: img_train, self.gtMaps: gt_train})
                     cost += c
-                    avg_cost += c / epochSize
+                    avg_cost = c
                 epochfinishTime = time.time()
                 # Save Weight (axis = epoch)
 
@@ -340,8 +340,10 @@ class HourglassModel():
         """
         print('Session initialization')
         #gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
-        #self.Session = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options, log_device_placement=True))
-        self.Session = tf.Session()
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+        self.Session = tf.Session(config=config)
+        #self.Session = tf.Session()
         t_start = time.time()
         self.Session.run(self.init)
         print('Sess initialized in ' + str(int(time.time() - t_start)) + ' sec.')
@@ -353,7 +355,10 @@ class HourglassModel():
         t_start = time.time()
         #gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
         #self.Session = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options,log_device_placement=True))
-        self.Session = tf.Session()
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+        self.Session = tf.Session(config=config)
+        #self.Session = tf.Session()
         print('Sess initialized in ' + str(int(time.time() - t_start)) + ' sec.')
 
     def hourglass(self, inputs):
