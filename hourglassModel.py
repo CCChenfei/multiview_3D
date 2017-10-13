@@ -72,7 +72,7 @@ class HourglassModel():
         self.nLow = nLow
         self.dataset = dataset
         self.cpu = '/cpu:0'
-        self.gpu = ['/gpu:0','/gpu:1']
+        self.gpu = ['/gpu:0']
         self.logdir_train = logdir_train
         self.logdir_test = logdir_test
         self.joints = joints
@@ -230,7 +230,7 @@ class HourglassModel():
                     percent = (float(i + 1) / epochSize) * 100
                     num = np.int(20 * percent / 100)
                     tToEpoch = int((time.time() - epochstartTime) * (100 - percent) / (percent))
-                    sys.stdout.write('\r Train: {0}>'.format("=" * num) + "{0}>".format(" " * (20 - num)) + '||' + str(percent)[:4] + '%' + ' -cost: ' + str(cost)[:6] + ' -avg_loss: ' + str(avg_cost)[:5] + ' -timeToEnd: ' + str(tToEpoch) + ' sec.')
+                    sys.stdout.write('\r Train: {0}>'.format("=" * num) + "{0}>".format(" " * (20 - num)) + '||' + str(percent)[:4] + '%' + ' -cost: ' + str(cost)[:8] + ' -avg_loss: ' + str(avg_cost)[:8] + ' -timeToEnd: ' + str(tToEpoch) + ' sec.')
                     sys.stdout.flush()
                     img_train, gt_train, weight_train = next(self.generator)
                     if i % saveStep == 0:
