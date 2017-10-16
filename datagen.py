@@ -83,7 +83,7 @@ class DataGenerator():
         Generate image/heatmap arrays when needed (Generate arrays while training, increase training time - Need to compute arrays at every iteration)
     """
 
-    def __init__(self, joints_name=None, img_dir=None, train_data_file=None, remove_joints=None):
+    def __init__(self, joints_name=None, img_dir=None, train_data_file=None, remove_joints=None, test_data_file=None, img_dir_test=None):
         """ Initializer
         Args:
             joints_name			: List of joints condsidered
@@ -102,7 +102,13 @@ class DataGenerator():
 
         self.img_dir = img_dir
         self.train_data_file = train_data_file
-        self.images = os.listdir(img_dir)
+        if img_dir!=None:
+            self.images = os.listdir(img_dir)
+
+        self.img_dir_test = img_dir_test
+        self.test_data_file = test_data_file
+        if img_dir_test!=None:
+            self.images_test = os.listdir(img_dir_test)
 
     # --------------------Generator Initialization Methods ---------------------
 
@@ -120,6 +126,7 @@ class DataGenerator():
     def _create_train_table(self):
         """ Create Table of samples from TEXT file
         """
+
         self.train_table = []
         self.data_dict = {}
         input_file = open(self.train_data_file, 'r')
@@ -141,6 +148,32 @@ class DataGenerator():
                         w[i] = 0
                 self.data_dict[name] = {'joints': joints, 'weights': w}
                 self.train_table.append(name)
+        input_file.close()
+
+    def _create_test_table(self):
+        """ Create Table of samples from TEXT file for test
+        """
+        self.test_table = []
+        self.data_dict_test = {}
+        input_file = open(self.test_data_file, 'r')
+        print('READING TEST DATA')
+        for line in input_file:
+            line = line.strip()
+            #line = line.split(' ')
+            line = re.split(' |,',line)
+            name = line[0]
+            joints = list(map(float, line[1:29]))
+            #joints = list(line[1:])
+            if self.toReduce:
+                joints = self._reduce_joints(joints)
+            else:
+                joints = np.reshape(joints, (-1, 2))
+                w = [1] * joints.shape[0]
+                for i in range(joints.shape[0]):
+                    if np.array_equal(joints[i], [-1, -1]):
+                        w[i] = 0
+                self.data_dict_test[name] = {'joints': joints, 'weights': w}
+                self.test_table.append(name)
         input_file.close()
 
     def _randomize(self):
@@ -359,7 +392,7 @@ class DataGenerator():
             name	: Name of the sample
             color	: Color Mode (RGB/BGR/GRAY)
         """
-        img = cv2.imread(os.path.join(self.img_dir, name))
+        img = cv2.imread(os.path.join(self.img_dir_test, name))
         if color == 'RGB':
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             return img
@@ -422,17 +455,16 @@ class DataGenerator():
         id_rsho = idrs
         self.total_joints = 0
         self.pck_samples = []
-        for s in self.data_dict.keys():
+        for s in self.data_dict_test.keys():
             if testSet == None:
-                if self.data_dict[s]['weights'][id_lhip] == 1 and self.data_dict[s]['weights'][id_rsho] == 1:
+                if self.data_dict_test[s]['weights'][id_lhip] == 1 and self.data_dict_test[s]['weights'][id_rsho] == 1:
                     self.pck_samples.append(s)
-                    wIntel = np.unique(self.data_dict[s]['weights'], return_counts=True)
+                    wIntel = np.unique(self.data_dict_test[s]['weights'], return_counts=True)
                     self.total_joints += dict(zip(wIntel[0], wIntel[1]))[1]
             else:
-                if self.data_dict[s]['weights'][id_lhip] == 1 and self.data_dict[s]['weights'][
-                    id_rsho] == 1 and s in testSet:
+                if self.data_dict_test[s]['weights'][id_lhip] == 1 and self.data_dict_test[s]['weights'][id_rsho] == 1 and s in testSet:
                     self.pck_samples.append(s)
-                    wIntel = np.unique(self.data_dict[s]['weights'], return_counts=True)
+                    wIntel = np.unique(self.data_dict_test[s]['weights'], return_counts=True)
                     self.total_joints += dict(zip(wIntel[0], wIntel[1]))[1]
         print('PCK PREPROCESS DONE: \n --Samples:', len(self.pck_samples), '\n --Num.Joints', self.total_joints)
 
@@ -449,12 +481,12 @@ class DataGenerator():
         """
         if sample != None:
             try:
-                joints = self.data_dict[sample]['joints']
-                w = self.data_dict[sample]['weights']
+                joints = (self.data_dict_test[sample]['joints'])*64/256
+                w = self.data_dict_test[sample]['weights']
                 img = self.open_img(sample)
                 img = img.astype(np.uint8)
                 img = scm.imresize(img, (256, 256))
-                return img, w, joints
+                return img, joints, w
             except:
                 return False
         else:
