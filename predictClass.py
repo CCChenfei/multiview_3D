@@ -396,7 +396,7 @@ class PredictProcessor():
             img = np.copy(img)
         if norm:
             img_hg = img / 255
-        hg = self.HG.Session.run(self.HG.pred_sigmoid, feed_dict={self.HG.img: np.expand_dims(img_hg, axis=0)})
+        hg = self.HG.Session.run(self.HG.pred_sigmoid, feed_dict={self.HG.img: np.expand_dims(img, axis=0)})
         j = np.ones(shape=(self.params['num_joints'], 2)) * -1
         for i in range(len(j)):
             idx = np.unravel_index(hg[0, :, :, i].argmax(), (64, 64))
@@ -481,13 +481,18 @@ class PredictProcessor():
                 self.pck(w, gtJoints, prJoints, idlh=idlh, idrs=idrs)
                 self.pck_mean = [i + j for i,j in zip(self.pck_mean,self.ratio_pck)]
                 #self.pck_mean = np.array(self.ratio_pck) + np.array(self.pck_mean)
-                self.pltSkeleton(img,thresh=0.2,pltJ=True,pltL=True,tocopy=True,norm=True)
+                img_to_show = self.pltSkeleton(img,thresh=0.2,pltJ=True,pltL=True,tocopy=True,norm=False)
+                cv2.imshow("img",img_to_show)
+                cv2.waitKey()
+                # while(cv2.waitKey()==27):
+                #     pass
         #self.pck_mean = np.array(self.pck_mean) / len(datagen.pck_samples)
         self.pck_mean = [k / samples for k in self.pck_mean]
-        print('pck：','head ',self.pck_mean[0], 'neck ',self.pck_mean[1], 'r_shoulder ',self.pck_mean[2], 'l_shoulder ', self.pck_mean[3],'r_elbow ',self.pck_mean[4], 'l_elbow ',self.pck_mean[5], 'r_wrist ',self.pck_mean[6], 'l_wrist ',self.pck_mean[7], 'r_hip ',self.pck_mean[8], 'l_hip ',self.pck_mean[9], 'r_knee ',self.pck_mean[10], 'l_knee ',self.pck_mean[11], 'r_anckle ',self.pck_mean[12], 'l_anckle ',self.pck_mean[13])
+        #print('pck：','head ',self.pck_mean[0], 'neck ',self.pck_mean[1], 'r_shoulder ',self.pck_mean[2], 'l_shoulder ', self.pck_mean[3],'r_elbow ',self.pck_mean[4], 'l_elbow ',self.pck_mean[5], 'r_wrist ',self.pck_mean[6], 'l_wrist ',self.pck_mean[7], 'r_hip ',self.pck_mean[8], 'l_hip ',self.pck_mean[9], 'r_knee ',self.pck_mean[10], 'l_knee ',self.pck_mean[11], 'r_anckle ',self.pck_mean[12], 'l_anckle ',self.pck_mean[13])
         print('Done in ', int(time() - startT), 'sec.')
 
-
+    # def getJointsDist(self, gtJ, prJ):
+    # def compute_pcp(self, datagen,):
 # if __name__ == '__main__':
 #     t = time()
 #     params = process_config('configTiny.cfg')
