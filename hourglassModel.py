@@ -180,6 +180,8 @@ class HourglassModel():
                 tf.summary.scalar('loss', self.loss, collections=['train'])
                 tf.summary.scalar('learning_rate', self.lr, collections=['train'])
             with tf.name_scope('summary'):
+                # add validation test
+                tf.summary.scalar('valid_loss', self.loss, collections=['test'])
                 for i in range(len(self.joints)):
                     tf.summary.scalar(self.joints[i], self.joint_accur[i], collections=['train', 'test'])
         self.train_op = tf.summary.merge_all('train')
@@ -258,14 +260,21 @@ class HourglassModel():
                 accuracy_array = np.array([0.0] * len(self.joint_accur))
                 for i in range(validIter):
                     img_valid, gt_valid, w_valid = next(self.generator)
-                    accuracy_pred = self.Session.run(self.joint_accur,feed_dict={self.img: img_valid, self.gtMaps: gt_valid})
+                    accuracy_pred = self.Session.run(self.joint_accur, feed_dict={self.img: img_valid, self.gtMaps: gt_valid})
                     accuracy_array += np.array(accuracy_pred, dtype=np.float32) / validIter
+                    # valid_loss += np.array(valid_loss, dtype=np.float32)/validIter
                 print('--Avg. Accuracy =', str((np.sum(accuracy_array) / len(accuracy_array)) * 100)[:6], '%')
                 self.resume['accur'].append(accuracy_pred)
                 self.resume['err'].append(np.sum(accuracy_array) / len(accuracy_array))
-                valid_summary = self.Session.run(self.test_op, feed_dict={self.img: img_valid, self.gtMaps: gt_valid})
-                self.test_summary.add_summary(valid_summary, epoch)
-                self.test_summary.flush()
+                for i in range(validIter):
+                    img_valid_,gt_valid_,w_valid = next(self.valid_gen)
+                    valid_loss = self.Session.run(self.loss, feed_dict={self.img:img_valid_, self.gtMaps: gt_valid_})
+                    valid_loss += np.array(valid_loss, dtype=np.float32) / validIter
+                    valid_summary = self.Session.run(self.test_op, feed_dict={self.img: img_valid_, self.gtMaps: gt_valid_})
+                #     valid_summary = self.Session.run(self.test_op, feed_dict={self.img: img_valid, self.gtMaps: gt_valid})
+                    self.test_summary.add_summary(valid_summary, epoch*validIter+i)
+                    self.test_summary.flush()
+                print('Epoch ' + str(epoch) + '/' + str(nEpochs) + ' done, valid_loss:', valid_loss,' in ' + str(int(epochfinishTime - epochstartTime)) + ' sec.' + ' -avg_time/batch: ' + str(((epochfinishTime - epochstartTime) / epochSize))[:4] + ' sec.')
             print('Training Done')
             print('Resume:' + '\n' + '  Epochs: ' + str(nEpochs) + '\n' + '  n. Images: ' + str(nEpochs * epochSize * self.batchSize))
             print('  Final Loss: ' + str(cost) + '\n' + '  Relative Loss: ' + str(100 * self.resume['loss'][-1] / (self.resume['loss'][0] + 0.1)) + '%')
@@ -568,11 +577,3 @@ class HourglassModel():
         for i in range(num_image):
             err = tf.add(err, self._compute_err(pred[i], gtMap[i]))
         return tf.subtract(tf.to_float(1), err / num_image)
-
-    # MULTI CONTEXT ATTENTION MECHANISM
-    # WORK IN PROGRESS DO NOT USE THESE METHODS
-    # BASED ON:
-    # Multi-Context Attention for Human Pose Estimation
-    # Authors: Xiao Chu, Wei Yang, Wanli Ouyang, Cheng Ma, Alan L. Yuille, Xiaogang Wang
-    # Paper: https://arxiv.org/abs/1702.07432
-    # GitHub Torch7 Code: https://github.com/bearpaw/pose-attention

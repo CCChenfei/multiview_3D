@@ -322,7 +322,7 @@ class DataGenerator():
                         # May Cause trouble, bug in OpenCV imgwrap.cpp:3229
                         # error: (-215) ssize.area() > 0 in function cv::resize
                         # img = cv2.resize(img, (256,256), interpolation = cv2.INTER_CUBIC)
-                        img, hm = self._augment(img, hm)
+                        # img, hm = self._augment(img, hm)
                         hm = np.expand_dims(hm, axis=0)
                         hm = np.repeat(hm, stacks, axis=0)
                         if normalize:
@@ -358,11 +358,11 @@ class DataGenerator():
                     joints = self.data_dict[name]['joints']
                     weight = np.asarray(self.data_dict[name]['weights'])
                     train_weights[i] = weight
-                    img = self.open_img(name)
+                    img = self.open_img(name=name,sample='train',color='RGB')
                     hm = self._generate_hm(64, 64, joints, 2, weight)
                     img = img.astype(np.uint8)
                     img = scm.imresize(img, (256, 256))
-                    img, hm = self._augment(img, hm)
+                    # img, hm = self._augment(img, hm)
                     hm = np.expand_dims(hm, axis=0)
                     hm = np.repeat(hm, stacks, axis=0)
                     if normalize:
@@ -386,13 +386,16 @@ class DataGenerator():
         return self._aux_generator(batch_size=batchSize, stacks=stacks, normalize=norm, sample_set=sample)
 
     # ---------------------------- Image Reader --------------------------------
-    def open_img(self, name, color='RGB'):
+    def open_img(self, name, sample = 'train', color='RGB'):
         """ Open an image
         Args:
             name	: Name of the sample
             color	: Color Mode (RGB/BGR/GRAY)
         """
-        img = cv2.imread(os.path.join(self.img_dir_test, name))
+        if sample == 'train':
+            img = cv2.imread(os.path.join(self.img_dir, name))
+        else:
+            img = cv2.imread(os.path.join(self.img_dir_test, name))
         if color == 'RGB':
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             return img
@@ -483,7 +486,7 @@ class DataGenerator():
             try:
                 joints = (self.data_dict_test[sample]['joints'])*64/256
                 w = self.data_dict_test[sample]['weights']
-                img = self.open_img(sample)
+                img = self.open_img(name=sample,sample='test',color='RGB')
                 img = img.astype(np.uint8)
                 img = scm.imresize(img, (256, 256))
                 return img, joints, w

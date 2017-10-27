@@ -240,9 +240,9 @@ class PredictProcessor():
             t = time()
         if img.shape == (256, 256, 3):
             if sess is None:
-                out = self.HG.Session.run(self.HG.pred_sigmoid, feed_dict={self.HG.img: np.expand_dims(img, axis=0)})
+                out = self.HG.Session.run(self.HG.pred_final, feed_dict={self.HG.img: np.expand_dims(img, axis=0)})
             else:
-                out = sess.run(self.HG.pred_sigmoid, feed_dict={self.HG.img: np.expand_dims(img, axis=0)})
+                out = sess.run(self.HG.pred_final, feed_dict={self.HG.img: np.expand_dims(img, axis=0)})
         else:
             print('Image Size does not match placeholder shape')
             raise Exception
@@ -299,9 +299,9 @@ class PredictProcessor():
             Not more efficient than Numpy, prefer Numpy for such operation!
         """
         if sess is None:
-            hm = self.HG.Session.run(self.HG.pred_sigmoid, feed_dict={self.HG.img: img})
+            hm = self.HG.Session.run(self.HG.pred_final, feed_dict={self.HG.img: img})
         else:
-            hm = sess.run(self.HG.pred_sigmoid, feed_dict={self.HG.img: img})
+            hm = sess.run(self.HG.pred_final, feed_dict={self.HG.img: img})
         joints = -1 * np.ones(shape=(self.params['num_joints'], 2))
         for i in range(self.params['num_joints']):
             index = np.unravel_index(hm[0, :, :, i].argmax(), (self.params['hm_size'], self.params['hm_size']))
@@ -325,7 +325,7 @@ class PredictProcessor():
         if debug:
             t = time()
         if batch[0].shape == (256, 256, 3):
-            out = self.HG.Session.run(self.HG.pred_sigmoid, feed_dict={self.HG.img: batch})
+            out = self.HG.Session.run(self.HG.pred_final, feed_dict={self.HG.img: batch})
         else:
             print('Image Size does not match placeholder shape')
             raise Exception
@@ -396,7 +396,7 @@ class PredictProcessor():
             img = np.copy(img)
         if norm:
             img_hg = img / 255
-        hg = self.HG.Session.run(self.HG.pred_sigmoid, feed_dict={self.HG.img: np.expand_dims(img, axis=0)})
+        hg = self.HG.Session.run(self.HG.pred_final, feed_dict={self.HG.img: np.expand_dims(img_hg, axis=0)})
         j = np.ones(shape=(self.params['num_joints'], 2)) * -1
         for i in range(len(j)):
             idx = np.unravel_index(hg[0, :, :, i].argmax(), (64, 64))
