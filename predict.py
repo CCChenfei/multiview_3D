@@ -76,6 +76,7 @@ class Inference():
         self.predict.load_model(load=model)
         self.predict._create_prediction_tensor()
         self.predict.compute_pck(datagen=datatest,idlh=9,idrs=2)
+        # self.predict.save_output_as_mat(datagen=datatest,idlh=9,idrs=2)
         print('Done: ', time() - t, ' sec.')
 
 
