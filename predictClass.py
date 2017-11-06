@@ -196,7 +196,10 @@ class PredictProcessor():
             with tf.name_scope('prediction'):
                 self.HG.pred_sigmoid = tf.nn.sigmoid(self.HG.output[:, self.HG.nStack - 1],
                                                      name='sigmoid_final_prediction')
-                self.HG.pred_final = self.HG.output[:, self.HG.nStack - 1]
+                self.HG.pred_final = self.HG.output[:,self.HG.nStack - 1]
+                # test = self.HG.output[:,self.HG.nStack - 1,:,:,:]
+                # result = self.HG.pred_final == test
+                # print(result)
                 self.HG.joint_tensor = self._create_joint_tensor(self.HG.output[0], name='joint_tensor')
                 self.HG.joint_tensor_final = self._create_joint_tensor(self.HG.output[0, -1], name='joint_tensor_final')
         print('Prediction Tensors Ready!')
@@ -239,6 +242,7 @@ class PredictProcessor():
         if debug:
             t = time()
         if img.shape == (256, 256, 3):
+            img = img.astype(np.float32)/255
             if sess is None:
                 out = self.HG.Session.run(self.HG.pred_final, feed_dict={self.HG.img: np.expand_dims(img, axis=0)})
             else:
@@ -484,7 +488,7 @@ class PredictProcessor():
                 self.pck(w, gtJoints, prJoints, idlh=idlh, idrs=idrs)
                 self.pck_mean = [i + j for i,j in zip(self.pck_mean,self.ratio_pck)]
                 #self.pck_mean = np.array(self.ratio_pck) + np.array(self.pck_mean)
-                img_to_show = self.pltSkeleton(img,thresh=0.2,pltJ=True,pltL=True,tocopy=True,norm=True)
+                img_to_show = self.pltSkeleton(img,thresh=0.2,pltJ=True,pltL=True,tocopy=True,norm=False)
                 cv2.imshow("img",img_to_show)
                 cv2.waitKey()
                 # while(cv2.waitKey()==27):
@@ -497,12 +501,20 @@ class PredictProcessor():
     def save_output_as_mat(self, datagen, idlh=9, idrs=2, testSet=None):
         datagen.pck_ready(idlh=idlh, idrs=idrs, testSet=testSet)
         samples = len(datagen.pck_samples)
+        # out = [None]*samples
+        # with open('testoutput.mat', 'a')as f:
         for idx, sample in enumerate(datagen.pck_samples):
             res = datagen.getSample(sample)
             if res != False:
                 img, gtJoints, w = res
-                out = self.pred(img/255)
-                scipy.io.savemat('testoutput'+str(idx)+'.mat', {'out':out})
+                out1 = self.pred(img)
+                out = out1[0]
+                # with open('testoutput.mat', 'a')as f:
+                #     scipy.io.savemat(f, {'joint'+str(idx+1): out1})
+                scipy.io.savemat('joints/joint'+str(idx+1)+'.mat',{'joint':out})
+        # f.close()
+
+        # scipy.io.savemat('testoutput.mat', {'out':out})
         print('Done for save')
     # def getJointsDist(self, gtJ, prJ):
     # def compute_pcp(self, datagen,):

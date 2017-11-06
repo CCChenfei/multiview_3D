@@ -458,7 +458,7 @@ class DataGenerator():
         id_rsho = idrs
         self.total_joints = 0
         self.pck_samples = []
-        for s in self.data_dict_test.keys():
+        for s in self.test_table:
             if testSet == None:
                 if self.data_dict_test[s]['weights'][id_lhip] == 1 and self.data_dict_test[s]['weights'][id_rsho] == 1:
                     self.pck_samples.append(s)
