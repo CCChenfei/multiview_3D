@@ -7,10 +7,10 @@ opt.numJoints = 14;
 
 numimages = 28961;
 for ind = 1 : numimages
-    img = imread(['/home/chenf/Documents/pose_estimation/data/Human3.6Mall/test/c1/im',num2str(ind),'.jpg']);
+    img = imread(['/home/chenf/Documents/pose_estimation/data/Human3.6M/test/c1/im',num2str(ind),'.jpg']);
     imgPose = prepareImagePose(img);
     
-    load(['/home/chenf/PycharmProjects/hourglasstf/joints/joint',num2str(ind),'.mat']);
+    load(['/home/chenf/PycharmProjects/hourglasstf/joints_human3.6M/joint',num2str(ind),'.mat']);
     output = joint;
     [joints,heatmaps] = processHeatmap(output, opt);
     

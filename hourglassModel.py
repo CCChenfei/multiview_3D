@@ -32,6 +32,7 @@ import numpy as np
 import sys
 import datetime
 import os
+import scipy.io
 
 
 class HourglassModel():
@@ -76,6 +77,8 @@ class HourglassModel():
         self.logdir_train = logdir_train
         self.logdir_test = logdir_test
         self.joints = joints
+        self.train_order = []
+        self.valid_order = []
 
     # ACCESSOR
 
@@ -220,6 +223,7 @@ class HourglassModel():
             self.resume['accur'] = []
             self.resume['loss'] = []
             self.resume['err'] = []
+
             for epoch in range(nEpochs):
                 epochstartTime = time.time()
                 avg_cost = 0.
@@ -234,14 +238,17 @@ class HourglassModel():
                     tToEpoch = int((time.time() - epochstartTime) * (100 - percent) / (percent))
                     sys.stdout.write('\r Train: {0}>'.format("=" * num) + "{0}>".format(" " * (20 - num)) + '||' + str(percent)[:4] + '%' + ' -cost: ' + str(cost)[:8] + ' -avg_loss: ' + str(avg_cost)[:8] + ' -timeToEnd: ' + str(tToEpoch) + ' sec.')
                     sys.stdout.flush()
-                    img_train, gt_train, weight_train = next(self.generator)
+                    img_train, gt_train, weight_train, order = next(self.generator)
+                    self.train_order.append(order)
                     if i % saveStep == 0:
-                        _, c, summary = self.Session.run([self.train_rmsprop, self.loss, self.train_op],feed_dict={self.img: img_train, self.gtMaps: gt_train})
+                        _, out, c, summary = self.Session.run([self.train_rmsprop, self.output, self.loss, self.train_op],feed_dict={self.img: img_train, self.gtMaps: gt_train})
                         # Save summary (Loss + Accuracy)
                         self.train_summary.add_summary(summary, epoch * epochSize + i)
                         self.train_summary.flush()
                     else:
-                        _, c, = self.Session.run([self.train_rmsprop, self.loss],feed_dict={self.img: img_train, self.gtMaps: gt_train})
+                        _, out, c, = self.Session.run([self.train_rmsprop, self.output, self.loss],feed_dict={self.img: img_train, self.gtMaps: gt_train})
+                    for i in range(self.batchSize):
+                        scipy.io.savemat('fmap/' + order[i] + '.mat', {'fmap': out[i, self.nStack - 1]})
                     cost += c
                     avg_cost = c
                 epochfinishTime = time.time()
@@ -259,7 +266,7 @@ class HourglassModel():
                 # Validation Set
                 accuracy_array = np.array([0.0] * len(self.joint_accur))
                 for i in range(validIter):
-                    img_valid, gt_valid, w_valid = next(self.generator)
+                    img_valid, gt_valid, w_valid, _= next(self.generator)
                     accuracy_pred = self.Session.run(self.joint_accur, feed_dict={self.img: img_valid, self.gtMaps: gt_valid})
                     accuracy_array += np.array(accuracy_pred, dtype=np.float32) / validIter
                     # valid_loss += np.array(valid_loss, dtype=np.float32)/validIter
@@ -267,8 +274,11 @@ class HourglassModel():
                 self.resume['accur'].append(accuracy_pred)
                 self.resume['err'].append(np.sum(accuracy_array) / len(accuracy_array))
                 for i in range(validIter):
-                    img_valid_,gt_valid_,w_valid = next(self.valid_gen)
-                    valid_loss = self.Session.run(self.loss, feed_dict={self.img:img_valid_, self.gtMaps: gt_valid_})
+                    img_valid_,gt_valid_,w_valid, order_v = next(self.valid_gen)
+                    self.valid_order.append(order_v)
+                    out_v, valid_loss = self.Session.run([self.output, self.loss], feed_dict={self.img:img_valid_, self.gtMaps: gt_valid_})
+                    for i in range(self.batchSize):
+                        scipy.io.savemat('fmap/' + order_v[i] + '.mat', {'fmap': out[i, self.nStack - 1]})
                     valid_loss += np.array(valid_loss, dtype=np.float32) / validIter
                     valid_summary = self.Session.run(self.test_op, feed_dict={self.img: img_valid_, self.gtMaps: gt_valid_})
                 #     valid_summary = self.Session.run(self.test_op, feed_dict={self.img: img_valid, self.gtMaps: gt_valid})
@@ -280,6 +290,8 @@ class HourglassModel():
             print('  Final Loss: ' + str(cost) + '\n' + '  Relative Loss: ' + str(100 * self.resume['loss'][-1] / (self.resume['loss'][0] + 0.1)) + '%')
             print('  Relative Improvement: ' + str((self.resume['err'][-1] - self.resume['err'][0]) * 100) + '%')
             print('  Training Time: ' + str(datetime.timedelta(seconds=time.time() - startTime)))
+            np.save('train_order',self.train_order)
+            np.save('valid_order',self.valid_order)
 
     def record_training(self, record):
         """ Record Training Data and Export them in CSV file

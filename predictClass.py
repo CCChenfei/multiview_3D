@@ -511,7 +511,9 @@ class PredictProcessor():
                 out = out1[0]
                 # with open('testoutput.mat', 'a')as f:
                 #     scipy.io.savemat(f, {'joint'+str(idx+1): out1})
-                scipy.io.savemat('joints/joint'+str(idx+1)+'.mat',{'joint':out})
+                scipy.io.savemat('joints_human3.6M/joint'+str(idx+1)+'.mat',{'joint':out})
+                # if(idx>20):
+                #     break
         # f.close()
 
         # scipy.io.savemat('testoutput.mat', {'out':out})
