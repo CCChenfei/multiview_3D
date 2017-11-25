@@ -6,7 +6,7 @@ TRAIN LAUNCHER
 import configparser
 from hourglassModel import HourglassModel
 from datagen import DataGenerator
-
+import tensorflow as tf
 
 def process_config(conf_file):
     """
@@ -37,11 +37,25 @@ if __name__ == '__main__':
     print('--Parsing Config File')
     params = process_config('config.cfg')
     print('--Creating Dataset')
-    dataset = DataGenerator(params['joint_list'], params['img_directory'], params['training_txt_file'],remove_joints=params['remove_joints'])
-    dataset._create_train_table()
-    dataset._randomize()
-    dataset._create_sets()
+    dataset1 = DataGenerator(params['joint_list'], params['img_directory1'], params['training_txt_file1'],remove_joints=params['remove_joints'], img_dir_test=params['img_directory_test1'], test_data_file=params['test_txt_file1'])
+    dataset2 = DataGenerator(params['joint_list'], params['img_directory2'], params['training_txt_file2'],remove_joints=params['remove_joints'], img_dir_test=params['img_directory_test2'], test_data_file=params['test_txt_file2'])
+    dataset3 = DataGenerator(params['joint_list'], params['img_directory3'], params['training_txt_file3'],remove_joints=params['remove_joints'], img_dir_test=params['img_directory_test3'], test_data_file=params['test_txt_file3'])
+    dataset4 = DataGenerator(params['joint_list'], params['img_directory4'], params['training_txt_file4'],remove_joints=params['remove_joints'], img_dir_test=params['img_directory_test4'], test_data_file=params['test_txt_file4'])
+    dataset1._create_train_table()
+    dataset1._randomize()
+    dataset1._create_sets()
+    dataset2._create_train_table()
+    dataset2._randomize()
+    dataset2._create_sets()
+    dataset3._create_train_table()
+    dataset3._randomize()
+    dataset3._create_sets()
+    dataset4._create_train_table()
+    dataset4._randomize()
+    dataset4._create_sets()
+    dataset = [dataset1, dataset2, dataset3, dataset4]
+
 
     model = HourglassModel(nFeat=params['nfeats'], nStack=params['nstacks'],nLow=params['nlow'], outputDim=params['num_joints'], batch_size=params['batch_size'],training=True, drop_rate=params['dropout_rate'],lear_rate=params['learning_rate'], decay=params['learning_rate_decay'],decay_step=params['decay_step'], dataset=dataset, name=params['name'],logdir_train=params['log_dir_train'], logdir_test=params['log_dir_test'],joints=params['joint_list'])
     model.generate_model()
-    model.training_init(nEpochs=params['nepochs'], epochSize=params['epoch_size'], saveStep=params['saver_step'],dataset=None)
+    model.training_init(nEpochs=params['nepochs'], epochSize=params['epoch_size'], saveStep=params['saver_step'],dataset='4hg_139')

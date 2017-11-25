@@ -83,7 +83,7 @@ class DataGenerator():
         Generate image/heatmap arrays when needed (Generate arrays while training, increase training time - Need to compute arrays at every iteration)
     """
 
-    def __init__(self, joints_name=None, img_dir=None, train_data_file=None, remove_joints=None, test_data_file=None, img_dir_test=None):
+    def __init__(self, joints_name=None, img_dir=None, train_data_file=None, remove_joints=None, img_dir_test=None, test_data_file=None):
         """ Initializer
         Args:
             joints_name			: List of joints condsidered
@@ -348,16 +348,16 @@ class DataGenerator():
             train_gtmap = np.zeros((batch_size, stacks, 64, 64, len(self.joints_list)), np.float32)
             train_weights = np.zeros((batch_size, len(self.joints_list)), np.float32)
             print(len(self.joints_list))
-            order = []
+            # order = []
             i = 0
             while i < batch_size:
                 try:
                     if sample_set == 'train':
                         name = random.choice(self.train_set)
-                        order.append(name)
+                        # order.append(name)
                     elif sample_set == 'valid':
                         name = random.choice(self.valid_set)
-                        order.append(name)
+                        # order.append(name)
                     joints = self.data_dict[name]['joints']
                     weight = np.asarray(self.data_dict[name]['weights'])
                     train_weights[i] = weight
@@ -376,7 +376,7 @@ class DataGenerator():
                     i = i + 1
                 except:
                     print('error file: ', name)
-            yield train_img, train_gtmap, train_weights, order
+            yield train_img, train_gtmap, train_weights
 
     def generator(self, batchSize=16, stacks=4, norm=True, sample='train'):
         """ Create a Sample Generator
