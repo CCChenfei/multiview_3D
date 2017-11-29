@@ -238,6 +238,7 @@ class HourglassModel():
     def _train(self, nEpochs=10, epochSize=1000, saveStep=500, validIter=10):
         """
         """
+        print("start training")
         with tf.name_scope('Train'):
             self.generator1 = self.dataset[0]._aux_generator(self.batchSize, self.nStack, normalize=True,sample_set='train')
             self.valid_gen1 = self.dataset[0]._aux_generator(self.batchSize, self.nStack, normalize=True,sample_set='valid')
@@ -388,7 +389,9 @@ class HourglassModel():
             for gpu in self.gpu:
                 with tf.device(gpu):
                     self._init_weight()
+                    print("ok")
                     self._define_saver_summary()
+                    print("ok")
                     if load is not None:
                         self.saver.restore(self.Session, load)
                     # try:
@@ -658,79 +661,81 @@ class HourglassModel():
         return tf.subtract(tf.to_float(1), err / num_image)
 
 
-    #
-    # def proj_splat(self, feats, K, Rcam):
-    #     KRcam = tf.matmul(K, Rcam)
-    #     with tf.variable_scope('ProjSplat'):
-    #         nR, fh, fw, fdim = feats.shape().as_list()
-    #         rsz_h = float(fh) / 256
-    #         rsz_w = float(fw) / 256
-    #
-    #         # Create voxel grid
-    #         with tf.name_scope('GridCenters'):
-    #             grid_range = tf.range(net.vmin + net.vsize / 2.0, net.vmax,
-    #                                   net.vsize)
-    #             self.grid = tf.stack(
-    #                 tf.meshgrid(grid_range, grid_range, grid_range))
-    #             self.rs_grid = tf.reshape(self.grid, [3, -1])
-    #             nV = self.rs_grid.shape()[1]
-    #             self.rs_grid = tf.concat([self.rs_grid, tf.ones([1, nV])], axis=0)
-    #
-    #         # Project grid
-    #         with tf.name_scope('World2Cam'):
-    #             im_p = tf.matmul(tf.reshape(KRcam, [-1, 4]), self.rs_grid)
-    #             im_x, im_y, im_z = im_p[0, :], im_p[1, :], im_p[2, :]
-    #             im_x = (im_x / im_z) * rsz_w
-    #             im_y = (im_y / im_z) * rsz_h
-    #             self.im_p, self.im_x, self.im_y, self.im_z = im_p, im_x, im_y, im_z
-    #
-    #         # Bilinear interpolation
-    #         with tf.name_scope('BilinearInterp'):
-    #             im_x = tf.clip_by_value(im_x, 0, fw - 1)
-    #             im_y = tf.clip_by_value(im_y, 0, fh - 1)
-    #             im_x0 = tf.cast(tf.floor(im_x), 'int32')
-    #             im_x1 = im_x0 + 1
-    #             im_y0 = tf.cast(tf.floor(im_y), 'int32')
-    #             im_y1 = im_y0 + 1
-    #             im_x0_f, im_x1_f = tf.to_float(im_x0), tf.to_float(im_x1)
-    #             im_y0_f, im_y1_f = tf.to_float(im_y0), tf.to_float(im_y1)
-    #
-    #             ind_grid = tf.range(0, nR)
-    #             ind_grid = tf.expand_dims(ind_grid, 1)
-    #             im_ind = tf.tile(ind_grid, [1, nV])
-    #
-    #             def _get_gather_inds(x, y):
-    #                 return tf.reshape(tf.stack([im_ind, y, x], axis=2), [-1, 3])
-    #
-    #             # Gather  values
-    #             Ia = tf.gather_nd(feats, _get_gather_inds(im_x0, im_y0))
-    #             Ib = tf.gather_nd(feats, _get_gather_inds(im_x0, im_y1))
-    #             Ic = tf.gather_nd(feats, _get_gather_inds(im_x1, im_y0))
-    #             Id = tf.gather_nd(feats, _get_gather_inds(im_x1, im_y1))
-    #
-    #             # Calculate bilinear weights
-    #             wa = (im_x1_f - im_x) * (im_y1_f - im_y)
-    #             wb = (im_x1_f - im_x) * (im_y - im_y0_f)
-    #             wc = (im_x - im_x0_f) * (im_y1_f - im_y)
-    #             wd = (im_x - im_x0_f) * (im_y - im_y0_f)
-    #             wa, wb = tf.reshape(wa, [-1, 1]), tf.reshape(wb, [-1, 1])
-    #             wc, wd = tf.reshape(wc, [-1, 1]), tf.reshape(wd, [-1, 1])
-    #             self.wa, self.wb, self.wc, self.wd = wa, wb, wc, wd
-    #             self.Ia, self.Ib, self.Ic, self.Id = Ia, Ib, Ic, Id
-    #             Ibilin = tf.add_n([wa * Ia, wb * Ib, wc * Ic, wd * Id])
-    #
-    #         with tf.name_scope('AppendDepth'):
-    #             # Concatenate depth value along ray to feature
-    #             Ibilin = tf.concat(
-    #                 [Ibilin, tf.reshape(im_z, [nV * nR, 1])], axis=1)
-    #             fdim = Ibilin.get_shape().as_list()[-1]
-    #             self.Ibilin = tf.reshape(Ibilin, [
-    #                 self.batch_size,self.im_batch, self.nvox, self.nvox, self.nvox,
-    #                 fdim
-    #             ])
-    #             self.Ibilin = tf.transpose(self.Ibilin, [0, 1, 3, 2, 4, 5])
-    #     return self.Ibilin
-    #
-    #
-    # def tf_static_shape(T):
-    #     return T.get_shape().as_list()
+
+    def proj_splat(self, feats, Rcam, f, c, k, p):
+        # KRcam = tf.matmul(K, Rcam)
+        with tf.variable_scope('ProjSplat'):
+            nR, fh, fw, fdim = feats.get_shape().as_list()
+            rsz_h = float(fh) / 256
+            rsz_w = float(fw) / 256
+
+            # Create voxel grid
+            with tf.name_scope('GridCenters'):
+                grid_range = tf.range(0,64)
+                self.grid = tf.stack(tf.meshgrid(grid_range, grid_range, grid_range))
+                self.rs_grid = tf.reshape(self.grid, [3, -1])
+                nV = self.rs_grid.get_shape().as_list()[1]
+                self.rs_grid = tf.concat([self.rs_grid, tf.ones([1, nV])], axis=0)
+
+            # Project grid
+            with tf.name_scope('World2Cam'):
+                p_cam = tf.matmul(Rcam, self.rs_grid)
+                x_cam, y_cam, z_cam = p_cam[0,:], p_cam[1,:], p_cam[2,:]
+                x_cam = x_cam / z_cam
+                y_cam = y_cam / z_cam
+                r2 = x_cam**2 + y_cam**2
+                x = x_cam * (1+(k[0]*r2)+(r2**2*k[1])+(r2**3*k[2])) + 2*p[0]*x_cam*y_cam+p[1]*(r2+2*x_cam**2)
+                y = y_cam * (1+(k[0]*r2)+(r2**2*k[1])+(r2**3*k[2])) + 2*p[1]*x_cam*y_cam+p[0]*(r2+2*y_cam**2)
+                im_x = f[0]*x + c[0]
+                im_y = f[1]*y + c[1]
+
+                # im_p = tf.matmul(tf.reshape(KRcam, [-1, 4]), self.rs_grid)
+                # im_x, im_y, im_z = im_p[0, :], im_p[1, :], im_p[2, :]
+                im_x = im_x * rsz_w
+                im_y = im_y * rsz_h
+                # self.im_p, self.im_x, self.im_y, self.im_z = im_p, im_x, im_y, im_z
+                self.im_x, self.im_y, self.im_z = im_x, im_y, z_cam
+
+            # Bilinear interpolation
+            with tf.name_scope('BilinearInterp'):
+                im_x = tf.clip_by_value(im_x, 0, fw - 1)
+                im_y = tf.clip_by_value(im_y, 0, fh - 1)
+                im_x0 = tf.cast(tf.floor(im_x), 'int32')
+                im_x1 = im_x0 + 1
+                im_y0 = tf.cast(tf.floor(im_y), 'int32')
+                im_y1 = im_y0 + 1
+                im_x0_f, im_x1_f = tf.to_float(im_x0), tf.to_float(im_x1)
+                im_y0_f, im_y1_f = tf.to_float(im_y0), tf.to_float(im_y1)
+
+                ind_grid = tf.range(0, nR)
+                ind_grid = tf.expand_dims(ind_grid, 1)
+                im_ind = tf.tile(ind_grid, [1, nV])
+
+                def _get_gather_inds(x, y):
+                    return tf.reshape(tf.stack([im_ind, y, x], axis=2), [-1, 3])
+
+                # Gather  values
+                Ia = tf.gather_nd(feats, _get_gather_inds(im_x0, im_y0))
+                Ib = tf.gather_nd(feats, _get_gather_inds(im_x0, im_y1))
+                Ic = tf.gather_nd(feats, _get_gather_inds(im_x1, im_y0))
+                Id = tf.gather_nd(feats, _get_gather_inds(im_x1, im_y1))
+
+                # Calculate bilinear weights
+                wa = (im_x1_f - im_x) * (im_y1_f - im_y)
+                wb = (im_x1_f - im_x) * (im_y - im_y0_f)
+                wc = (im_x - im_x0_f) * (im_y1_f - im_y)
+                wd = (im_x - im_x0_f) * (im_y - im_y0_f)
+                wa, wb = tf.reshape(wa, [-1, 1]), tf.reshape(wb, [-1, 1])
+                wc, wd = tf.reshape(wc, [-1, 1]), tf.reshape(wd, [-1, 1])
+                self.wa, self.wb, self.wc, self.wd = wa, wb, wc, wd
+                self.Ia, self.Ib, self.Ic, self.Id = Ia, Ib, Ic, Id
+                Ibilin = tf.add_n([wa * Ia, wb * Ib, wc * Ic, wd * Id])
+
+            with tf.name_scope('AppendDepth'):
+                # Concatenate depth value along ray to feature
+                Ibilin = tf.concat(
+                    [Ibilin, tf.reshape(self.im_z, [nV * nR, 1])], axis=1)
+                fdim = Ibilin.get_shape().as_list()[-1]
+                self.Ibilin = tf.reshape(Ibilin, [self.batch_size, 64,64,64,fdim])
+                self.Ibilin = tf.transpose(self.Ibilin, [0, 1, 3, 2, 4, 5])
+        return self.Ibilin
