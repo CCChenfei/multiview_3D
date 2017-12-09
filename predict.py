@@ -67,8 +67,14 @@ class Inference():
         """
         t = time()
         params = process_config(config_file)
-        datatest = DataGenerator(joints_name=params['joint_list'], img_dir_test=params['img_directory_test'], test_data_file=params['test_txt_file'],remove_joints=params['remove_joints'])
-        datatest._create_test_table()
+        datatest1 = DataGenerator(joints_name=params['joint_list'], img_dir_test=params['img_directory_test1'], test_data_file=params['test_txt_file1'],remove_joints=params['remove_joints'])
+        datatest1._create_test_table()
+        datatest2 = DataGenerator(joints_name=params['joint_list'], img_dir_test=params['img_directory_test2'],test_data_file=params['test_txt_file2'], remove_joints=params['remove_joints'])
+        datatest2._create_test_table()
+        datatest3 = DataGenerator(joints_name=params['joint_list'], img_dir_test=params['img_directory_test3'],test_data_file=params['test_txt_file3'], remove_joints=params['remove_joints'])
+        datatest3._create_test_table()
+        datatest4 = DataGenerator(joints_name=params['joint_list'], img_dir_test=params['img_directory_test4'],test_data_file=params['test_txt_file4'], remove_joints=params['remove_joints'])
+        datatest4._create_test_table()
         self.predict = PredictProcessor(params)
         self.predict.color_palette()
         self.predict.LINKS_JOINTS()
@@ -76,7 +82,8 @@ class Inference():
         self.predict.load_model(load=model)
         self.predict._create_prediction_tensor()
         # self.predict.compute_pck(datagen=datatest,idlh=9,idrs=2)
-        self.predict.save_output_as_mat(datagen=datatest,idlh=9,idrs=2)
+        # self.predict.save_output_as_mat(datagen=datatest,idlh=9,idrs=2)
+        self.predict.save_multioutput_as_mat(datagen1=datatest1, datagen2=datatest2,datagen3=datatest3,datagen4=datatest4,idlh=9,idrs=2)
         print('Done: ', time() - t, ' sec.')
 
 
@@ -130,4 +137,4 @@ class Inference():
 
 
 if __name__ == '__main__':
-    Inference('config.cfg','hg_200')
+    Inference('config.cfg','4hg_195')

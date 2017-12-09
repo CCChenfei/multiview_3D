@@ -83,7 +83,7 @@ class DataGenerator():
         Generate image/heatmap arrays when needed (Generate arrays while training, increase training time - Need to compute arrays at every iteration)
     """
 
-    def __init__(self, joints_name=None, img_dir=None, train_data_file=None, remove_joints=None, img_dir_test=None, test_data_file=None):
+    def __init__(self, joints_name=None, img_dir=None, train_data_file=None, remove_joints=None, img_dir_test=None, test_data_file=None, train_3D_gt=None, test_3D_gt=None):
         """ Initializer
         Args:
             joints_name			: List of joints condsidered
@@ -109,6 +109,8 @@ class DataGenerator():
         self.test_data_file = test_data_file
         if img_dir_test!=None:
             self.images_test = os.listdir(img_dir_test)
+        self.train_3D_gt = train_3D_gt
+        self.test_3D_gt = test_3D_gt
 
     # --------------------Generator Initialization Methods ---------------------
 
@@ -130,24 +132,76 @@ class DataGenerator():
         self.train_table = []
         self.data_dict = {}
         input_file = open(self.train_data_file, 'r')
+        if self.train_3D_gt != None:
+            input_file_3D = open(self.train_3D_gt,'r')
         print('READING TRAIN DATA')
-        for line in input_file:
-            line = line.strip()
-            #line = line.split(' ')
-            line = re.split(' |,',line)
-            name = line[0]
-            joints = list(map(float, line[1:29]))
-            #joints = list(line[1:])
-            if self.toReduce:
-                joints = self._reduce_joints(joints)
-            else:
-                joints = np.reshape(joints, (-1, 2))
-                w = [1] * joints.shape[0]
-                for i in range(joints.shape[0]):
-                    if np.array_equal(joints[i], [-1, -1]):
-                        w[i] = 0
-                self.data_dict[name] = {'joints': joints, 'weights': w}
-                self.train_table.append(name)
+        if self.train_3D_gt == None:
+            for line in input_file:
+                line = line.strip()
+                #line = line.split(' ')
+                line = re.split(' |,',line)
+                name = line[0]
+                joints = list(map(float, line[1:29]))
+                #joints = list(line[1:])
+                if self.toReduce:
+                    joints = self._reduce_joints(joints)
+                else:
+                    joints = np.reshape(joints, (-1, 2))
+                    w = [1] * joints.shape[0]
+                    for i in range(joints.shape[0]):
+                        if np.array_equal(joints[i], [-1, -1]):
+                            w[i] = 0
+                    self.data_dict[name] = {'joints': joints, 'weights': w}
+                    self.train_table.append(name)
+        else:
+            while True:
+                try:
+                    line1 = input_file.next()
+                    line2 = input_file_3D.next()
+                    line1 = re.split(' |,', line1)
+                    line2 = re.split(' |,', line2)
+                    name = line1[0]
+                    joints = list(map(float, line1[1:29]))
+                    joints_3D = list(map(float, line2[1:43]))
+                    if self.toReduce:
+                        joints = self._reduce_joints(joints)
+                        joints_3D = self._reduce_joints(joints_3D)
+                    else:
+                        joints = np.reshape(joints, (-1, 2))
+                        joints_3D = np.reshape(joints_3D,(-1,3))
+                        w = [1] * joints.shape[0]
+                        for i in range(joints.shape[0]):
+                            if np.array_equal(joints[i], [-1, -1]):
+                                w[i] = 0
+                        self.data_dict[name] = {'joints': joints, 'joints_3D':joints_3D,'weights': w}
+                        self.train_table.append(name)
+                except StopIteration:
+                    break
+            input_file_3D.close()
+            # for line1,line2 in input_file,input_file_3D:
+            #     line1 = line1.strip()
+            #     #line = line.split(' ')
+            #     line1 = re.split(' |,',line1)
+            #     line2 = line2.strip()
+            #     line2 = re.split(' |,',line2)
+            #     name = line1[0]
+            #     # name_3D = line2[0]
+            #     joints = list(map(float, line1[1:29]))
+            #     joints_3D = list(map(float,line2[1:43]))
+            #     #joints = list(line[1:])
+            #     if self.toReduce:
+            #         joints = self._reduce_joints(joints)
+            #         joints_3D = self._reduce_joints(joints_3D)
+            #     else:
+            #         joints = np.reshape(joints, (-1, 2))
+            #         joints_3D = np.reshape(joints_3D,(-1,3))
+            #         w = [1] * joints.shape[0]
+            #         for i in range(joints.shape[0]):
+            #             if np.array_equal(joints[i], [-1, -1]):
+            #                 w[i] = 0
+            #         self.data_dict[name] = {'joints': joints, 'joints_3D':joints_3D,'weights': w}
+            #         self.train_table.append(name)
+            # input_file_3D.close()
         input_file.close()
 
     def _create_test_table(self):
@@ -276,6 +330,26 @@ class DataGenerator():
                 hm[:, :, i] = np.zeros((height, width))
         return hm
 
+    def _make3DGaussian(self,height,width,depth,sigma=3,center=None):
+        x = np.arange(0,width,1,float)
+        y = np.arange(0,height,1,float)[:,np.newaxis]
+        z = np.arange(0,depth,1,float)[:,np.newaxis,np.newaxis]
+        if center is None:
+            x0 = width // 2
+            y0 = height // 2
+            z0 = depth //2
+        else:
+            x0 = center[0]
+            y0 = center[1]
+            z0 = center[2]
+        return np.exp(-0.5*((x-x0)**2+(y-y0)**2+(z-z0)**2)/sigma**2)
+
+    def _generate_3D_hm(self,height,width,depth,joints_3D,s):
+        num_joints = joints_3D.shape[0]
+        hm = np.zeros((height,width,depth,num_joints),dtype=np.float32)
+        for i in range(num_joints):
+            hm[:,:,:,i] = self._make3DGaussian(height,width,depth,sigma=s,center=(joints_3D[i,0],joints_3D[i,1],joints_3D[i,2]))
+        return hm
 
     def _augment(self, img, hm, max_rotation=30):
         """ # TODO : IMPLEMENT DATA AUGMENTATION
@@ -346,8 +420,10 @@ class DataGenerator():
         while True:
             train_img = np.zeros((batch_size, 256, 256, 3), dtype=np.float32)
             train_gtmap = np.zeros((batch_size, stacks, 64, 64, len(self.joints_list)), np.float32)
+            if self.train_3D_gt != None:
+                train_3D_gtmap = np.zeros((batch_size, 64, 64, 64, len(self.joints_list)), np.float32)
             train_weights = np.zeros((batch_size, len(self.joints_list)), np.float32)
-            print(len(self.joints_list))
+            # print(len(self.joints_list))
             # order = []
             i = 0
             while i < batch_size:
@@ -359,10 +435,14 @@ class DataGenerator():
                         name = random.choice(self.valid_set)
                         # order.append(name)
                     joints = self.data_dict[name]['joints']
+                    if self.train_3D_gt!=None:
+                        joints_3D = self.data_dict[name]['joints_3D']
                     weight = np.asarray(self.data_dict[name]['weights'])
                     train_weights[i] = weight
                     img = self.open_img(name=name,sample='train',color='RGB')
                     hm = self._generate_hm(64, 64, joints, 2, weight)
+                    if self.train_3D_gt != None:
+                        hm_3D = self._generate_3D_hm(64,64,64,joints_3D,2)
                     img = img.astype(np.uint8)
                     img = scm.imresize(img, (256, 256))
                     # img, hm = self._augment(img, hm)
@@ -373,10 +453,15 @@ class DataGenerator():
                     else:
                         train_img[i] = img.astype(np.float32)
                     train_gtmap[i] = hm
+                    if self.train_3D_gt != None:
+                        train_3D_gtmap[i] = hm_3D
                     i = i + 1
                 except:
                     print('error file: ', name)
-            yield train_img, train_gtmap, train_weights
+            if self.train_3D_gt != None:
+                yield train_img, train_gtmap, train_3D_gtmap, train_weights
+            else:
+                yield train_img, train_gtmap, train_weights
 
     def generator(self, batchSize=16, stacks=4, norm=True, sample='train'):
         """ Create a Sample Generator

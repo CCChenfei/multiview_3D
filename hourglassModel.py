@@ -34,7 +34,7 @@ import sys
 import datetime
 import os
 import scipy.io
-
+from convlstm import ConvGRUCell, ConvLSTMCell
 
 class HourglassModel():
     """ HourglassModel class: (to be renamed)
@@ -42,7 +42,7 @@ class HourglassModel():
     Please check README.txt for further information on model management.
     """
 
-    def __init__(self, nFeat=512, nStack=4, nLow=4, outputDim=14, batch_size=16, drop_rate=0.2,lear_rate=2.5e-4, decay=0.96, decay_step=2000, dataset=None, training=True, w_summary=True,logdir_train=None, logdir_test=None, name='hourglass',joints=['r_anckle', 'r_knee', 'r_hip', 'l_hip', 'l_knee', 'l_anckle', 'neck', 'head', 'r_wrist', 'r_elbow', 'r_shoulder', 'l_shoulder', 'l_elbow', 'l_wrist']):
+    def __init__(self, nFeat=512, nStack=4, nLow=4, outputDim=14, batch_size=16, drop_rate=0.2,lear_rate=2.5e-4, decay=0.96, decay_step=2000, dataset=None, training=True, w_summary=True,logdir_train=None, logdir_test=None, name='hourglass',joints=['r_anckle', 'r_knee', 'r_hip', 'l_hip', 'l_knee', 'l_anckle', 'neck', 'head', 'r_wrist', 'r_elbow', 'r_shoulder', 'l_shoulder', 'l_elbow', 'l_wrist'],cam=[]):
         """ Initializer
         Args:
             nStack				: number of stacks (stage/Hourglass modules)
@@ -74,12 +74,11 @@ class HourglassModel():
         self.nLow = nLow
         self.dataset = dataset
         self.cpu = '/cpu:0'
-        self.gpu = ['/gpu:0']
+        self.gpu = '/gpu:0'
         self.logdir_train = logdir_train
         self.logdir_test = logdir_test
         self.joints = joints
-        self.train_order = []
-        self.valid_order = []
+        self.cam = cam
 
     # ACCESSOR
 
@@ -136,64 +135,92 @@ class HourglassModel():
         """
         startTime = time.time()
         print('CREATE MODEL:')
-        for gpu in self.gpu:
-            with tf.device(gpu):
-                with tf.name_scope('inputs'):
-                    # Shape Input Image - batchSize: None, height: 256, width: 256, channel: 3 (RGB)
-                    self.img1 = tf.placeholder(dtype=tf.float32, shape=(None, 256, 256, 3), name='input_img1')
-                    self.img2 = tf.placeholder(dtype=tf.float32, shape=(None, 256, 256, 3), name='input_img2')
-                    self.img3 = tf.placeholder(dtype=tf.float32, shape=(None, 256, 256, 3), name='input_img3')
-                    self.img4 = tf.placeholder(dtype=tf.float32, shape=(None, 256, 256, 3), name='input_img4')
-                    # Shape Ground Truth Map: batchSize x nStack x 64 x 64 x outDim
-                    self.gtMaps1 = tf.placeholder(dtype=tf.float32, shape=(None, self.nStack, 64, 64, self.outDim))
-                    self.gtMaps2 = tf.placeholder(dtype=tf.float32, shape=(None, self.nStack, 64, 64, self.outDim))
-                    self.gtMaps3 = tf.placeholder(dtype=tf.float32, shape=(None, self.nStack, 64, 64, self.outDim))
-                    self.gtMaps4 = tf.placeholder(dtype=tf.float32, shape=(None, self.nStack, 64, 64, self.outDim))
-                inputTime = time.time()
-                print('---Inputs : Done (' + str(int(abs(inputTime - startTime))) + ' sec.)')
+        # for gpu in self.gpu:
+        with tf.device(self.gpu):
+            with tf.name_scope('inputs'):
+                # Shape Input Image - batchSize: None, height: 256, width: 256, channel: 3 (RGB)
+                self.img1 = tf.placeholder(dtype=tf.float32, shape=(None, 256, 256, 3), name='input_img1')
+                self.img2 = tf.placeholder(dtype=tf.float32, shape=(None, 256, 256, 3), name='input_img2')
+                self.img3 = tf.placeholder(dtype=tf.float32, shape=(None, 256, 256, 3), name='input_img3')
+                self.img4 = tf.placeholder(dtype=tf.float32, shape=(None, 256, 256, 3), name='input_img4')
+                # Shape Ground Truth Map: batchSize x nStack x 64 x 64 x outDim
+                self.gtMaps1 = tf.placeholder(dtype=tf.float32, shape=(None, self.nStack, 64, 64, self.outDim))
+                self.gtMaps2 = tf.placeholder(dtype=tf.float32, shape=(None, self.nStack, 64, 64, self.outDim))
+                self.gtMaps3 = tf.placeholder(dtype=tf.float32, shape=(None, self.nStack, 64, 64, self.outDim))
+                self.gtMaps4 = tf.placeholder(dtype=tf.float32, shape=(None, self.nStack, 64, 64, self.outDim))
 
-                self.output1 = self.hourglass(self.img1)
-                self.output2 = self.hourglass(self.img2)
-                self.output3 = self.hourglass(self.img3)
-                self.output4 = self.hourglass(self.img4)
-                graphTime = time.time()
-                print('---Graph : Done (' + str(int(abs(graphTime - inputTime))) + ' sec.)')
-                with tf.name_scope('loss'):
-                    self.loss1 = tf.losses.mean_squared_error(labels=self.gtMaps1, predictions=self.output1)
-                    self.loss2 = tf.losses.mean_squared_error(labels=self.gtMaps2, predictions=self.output2)
-                    self.loss3 = tf.losses.mean_squared_error(labels=self.gtMaps3, predictions=self.output3)
-                    self.loss4 = tf.losses.mean_squared_error(labels=self.gtMaps4, predictions=self.output4)
-                lossTime = time.time()
-                print('---Loss : Done (' + str(int(abs(graphTime - lossTime))) + ' sec.)')
+                self.gtMaps_3D = tf.placeholder(dtype=tf.float32, shape=(None, 64, 64, 64, self.outDim))
+            inputTime = time.time()
+            print('---Inputs : Done (' + str(int(abs(inputTime - startTime))) + ' sec.)')
+
+            self.output1 = self.hourglass(self.img1)
+            self.output2 = self.hourglass(self.img2)
+            self.output3 = self.hourglass(self.img3)
+            self.output4 = self.hourglass(self.img4)
+
+            camera1 = self.cam[0]['camera1'][0]
+            camera2 = self.cam[1]['camera2'][0]
+            camera3 = self.cam[2]['camera3'][0]
+            camera4 = self.cam[3]['camera4'][0]
+            self.proj_feat1 = self.proj_splat(self.output1[:,-1,:,:,:], camera1[0:9], camera1[9:12], camera1[12:14],camera1[14:16], camera1[16:19], camera1[19:21])
+            self.proj_feat2 = self.proj_splat(self.output2[:,-1,:,:,:], camera2[0:9], camera2[9:12], camera2[12:14],camera2[14:16], camera2[16:19], camera2[19:21])
+            self.proj_feat3 = self.proj_splat(self.output3[:,-1,:,:,:], camera3[0:9], camera3[9:12], camera3[12:14],camera3[14:16], camera3[16:19], camera3[19:21])
+            self.proj_feat4 = self.proj_splat(self.output4[:,-1,:,:,:], camera4[0:9], camera4[9:12], camera4[12:14],camera4[14:16], camera4[16:19], camera4[19:21])
+            self.proj_feat = tf.stack([self.proj_feat1, self.proj_feat2, self.proj_feat3, self.proj_feat4],axis=1)
+            self.rnn_output, self.rnn_state = self.convgru(self.proj_feat)
+        # with tf.device(self.gpu):
+        #     self.pool_grid = self.collapse_dims(self.rnn_state)
+            self.pred_vox = self.grid_unet64(self.rnn_state)
+            # self.pred_vox = self.uncollapse_dims(self.pred_vox,self.batchSize)
+            self.prob_vox = tf.nn.sigmoid(self.pred_vox)
+            graphTime = time.time()
+            print('---Graph : Done (' + str(int(abs(graphTime - inputTime))) + ' sec.)')
+            with tf.name_scope('loss'):
+                self.loss1 = tf.losses.mean_squared_error(labels=self.gtMaps1, predictions=self.output1)
+                self.loss2 = tf.losses.mean_squared_error(labels=self.gtMaps2, predictions=self.output2)
+                self.loss3 = tf.losses.mean_squared_error(labels=self.gtMaps3, predictions=self.output3)
+                self.loss4 = tf.losses.mean_squared_error(labels=self.gtMaps4, predictions=self.output4)
+                self.loss_3D = tf.losses.mean_squared_error(labels=self.gtMaps_3D, predictions=self.prob_vox)
+            lossTime = time.time()
+            print('---Loss : Done (' + str(int(abs(graphTime - lossTime))) + ' sec.)')
         with tf.device(self.cpu):
             # with tf.name_scope('accuracy'):
             #     self._accuracy_computation()
             # accurTime = time.time()
             # print('---Acc : Done (' + str(int(abs(accurTime - lossTime))) + ' sec.)')
             with tf.name_scope('steps'):
-                self.train_step = tf.Variable(0, name='global_step', trainable=False)
+                self.train_step1 = tf.Variable(0, name='global_step1', trainable=False)
+                self.train_step2 = tf.Variable(0, name='global_step2', trainable=False)
+                self.train_step3 = tf.Variable(0, name='global_step3', trainable=False)
+                self.train_step4 = tf.Variable(0, name='global_step4', trainable=False)
+                self.train_step5 = tf.Variable(0, name='global_step5', trainable=False)
             with tf.name_scope('lr'):
-                self.lr = tf.train.exponential_decay(self.learning_rate, self.train_step, self.decay_step, self.decay,staircase=True, name='learning_rate')
+                self.lr = tf.train.exponential_decay(self.learning_rate, self.train_step1, self.decay_step, self.decay,staircase=True, name='learning_rate')
             lrTime = time.time()
             print('---LR : Done (' + str(int(abs(lossTime - lrTime))) + ' sec.)')
-        for gpu in self.gpu:
-            with tf.device(gpu):
-                with tf.name_scope('rmsprop'):
-                    self.rmsprop = tf.train.RMSPropOptimizer(learning_rate=self.lr)
-                optimTime = time.time()
-                print('---Optim : Done (' + str(int(abs(optimTime - lrTime))) + ' sec.)')
-                with tf.name_scope('minimizer'):
-                    self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-                    with tf.control_dependencies(self.update_ops):
-                        self.train_rmsprop1 = self.rmsprop.minimize(self.loss1, self.train_step)
-                        self.train_rmsprop2 = self.rmsprop.minimize(self.loss2, self.train_step)
-                        self.train_rmsprop3 = self.rmsprop.minimize(self.loss3, self.train_step)
-                        self.train_rmsprop4 = self.rmsprop.minimize(self.loss4, self.train_step)
-                minimTime = time.time()
-                print('---Minimizer : Done (' + str(int(abs(optimTime - minimTime))) + ' sec.)')
-            self.init = tf.global_variables_initializer()
-            initTime = time.time()
-            print('---Init : Done (' + str(int(abs(initTime - minimTime))) + ' sec.)')
+        # for gpu in self.gpu:
+        with tf.device(self.gpu):
+            # with tf.name_scope('rmsprop'):
+            #     self.rmsprop = tf.train.RMSPropOptimizer(learning_rate=self.lr)
+            with tf.name_scope('adam'):
+                self.adam = tf.train.AdamOptimizer(learning_rate=self.lr)
+            optimTime = time.time()
+            print('---Optim : Done (' + str(int(abs(optimTime - lrTime))) + ' sec.)')
+            with tf.name_scope('minimizer'):
+                self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+                with tf.control_dependencies(self.update_ops):
+                    self.train_rmsprop1 = self.adam.minimize(self.loss1, self.train_step1)
+                    self.train_rmsprop2 = self.adam.minimize(self.loss2, self.train_step2)
+                    self.train_rmsprop3 = self.adam.minimize(self.loss3, self.train_step3)
+                    self.train_rmsprop4 = self.adam.minimize(self.loss4, self.train_step4)
+                    self.train_rmsprop_3D = self.adam.minimize(self.loss_3D, self.train_step5)
+            minimTime = time.time()
+            print('---Minimizer : Done (' + str(int(abs(optimTime - minimTime))) + ' sec.)')
+        self.init = tf.global_variables_initializer()
+        initTime = time.time()
+        print('---Init : Done (' + str(int(abs(initTime - minimTime))) + ' sec.)')
+
+
         with tf.device(self.cpu):
             with tf.name_scope('training'):
                 tf.summary.scalar('loss1', self.loss1, collections=['train'])
@@ -201,18 +228,23 @@ class HourglassModel():
                 tf.summary.scalar('loss3', self.loss3, collections=['train'])
                 tf.summary.scalar('loss4', self.loss4, collections=['train'])
                 tf.summary.scalar('learning_rate', self.lr, collections=['train'])
+                tf.summary.scalar('loss_3D', self.loss_3D, collections=['train'])
             with tf.name_scope('summary'):
                 # add validation test
                 tf.summary.scalar('valid_loss1', self.loss1, collections=['test'])
                 tf.summary.scalar('valid_loss2', self.loss2, collections=['test'])
                 tf.summary.scalar('valid_loss3', self.loss3, collections=['test'])
                 tf.summary.scalar('valid_loss4', self.loss4, collections=['test'])
+                tf.summary.scalar('valid_loss_3D',self.loss_3D, collections=['test'])
 
                 # for i in range(len(self.joints)):
                 #     tf.summary.scalar(self.joints[i], self.joint_accur[i], collections=['train', 'test'])
         self.train_op = tf.summary.merge_all('train')
         self.test_op = tf.summary.merge_all('test')
-        self.weight_op = tf.summary.merge_all('weight')
+        # self.weight_op = tf.summary.merge_all('weight')
+
+
+
         endTime = time.time()
         print('Model created (' + str(int(abs(endTime - startTime))) + ' sec.)')
         del endTime, startTime, initTime, optimTime, minimTime, lrTime, lossTime, graphTime, inputTime
@@ -223,17 +255,17 @@ class HourglassModel():
             load	: Model to load (None if training from scratch) (see README for further information)
         """
         with tf.name_scope('Session'):
-            for gpu in self.gpu:
-                with tf.device(gpu):
-                    self._init_session()
-                    self._define_saver_summary(summary=False)
-                    if load is not None:
-                        print('Loading Trained Model')
-                        t = time.time()
-                        self.saver.restore(self.Session, load)
-                        print('Model Loaded (', time.time() - t, ' sec.)')
-                    else:
-                        print('Please give a Model in args (see README for further information)')
+            # for gpu in self.gpu:
+            with tf.device(self.gpu):
+                self._init_session()
+                self._define_saver_summary(summary=False)
+                if load is not None:
+                    print('Loading Trained Model')
+                    t = time.time()
+                    self.saver.restore(self.Session, load)
+                    print('Model Loaded (', time.time() - t, ' sec.)')
+                else:
+                    print('Please give a Model in args (see README for further information)')
 
     def _train(self, nEpochs=10, epochSize=1000, saveStep=500, validIter=10):
         """
@@ -267,6 +299,8 @@ class HourglassModel():
                 cost3 = 0.
                 avg_cost4 = 0.
                 cost4 = 0.
+                avg_cost3D = 0.
+                cost3D = 0.
 
                 print('Epoch :' + str(epoch) + '/' + str(nEpochs) + '\n')
                 # Training Set
@@ -276,21 +310,23 @@ class HourglassModel():
                     percent = (float(i + 1) / epochSize) * 100
                     num = np.int(20 * percent / 100)
                     tToEpoch = int((time.time() - epochstartTime) * (100 - percent) / (percent))
-                    sys.stdout.write('\r Train: {0}>'.format("=" * num) + "{0}>".format(" " * (20 - num)) + '||' + str(percent)[:4] + '%' + ' -cost1: ' + str(cost1)[:8] + ' -avg_loss1: ' + str(avg_cost1)[:8] + ' -cost2: ' + str(cost2)[:8] + ' -avg_loss2: ' + str(avg_cost2)[:8]+ ' -cost3: ' + str(cost3)[:8] + ' -avg_loss3: ' + str(avg_cost3)[:8]+ ' -cost4: ' + str(cost4)[:8] + ' -avg_loss4: ' + str(avg_cost4)[:8]+ ' -timeToEnd: ' + str(tToEpoch) + ' sec.')
+                    sys.stdout.write('\r Train: {0}>'.format("=" * num) + "{0}>".format(" " * (20 - num)) + '||' + str(percent)[:4] + '%' + ' -cost1: ' + str(cost1)[:8] + ' -avg_loss1: ' + str(avg_cost1)[:8] + ' -cost2: ' + str(cost2)[:8] + ' -avg_loss2: ' + str(avg_cost2)[:8]+ ' -cost3: ' + str(cost3)[:8] + ' -avg_loss3: ' + str(avg_cost3)[:8]+ ' -cost4: ' + str(cost4)[:8] + ' -avg_loss4: ' + str(avg_cost4)[:8]+ ' -avg_loss_3D: ' + str(avg_cost3D)[:8]+' -timeToEnd: ' + str(tToEpoch) + ' sec.')
                     sys.stdout.flush()
-                    img_train1, gt_train1, weight_train1 = next(self.generator1)
+                    img_train1, gt_train1, gt_3D, weight_train1 = next(self.generator1)
                     img_train2, gt_train2, weight_train2 = next(self.generator2)
                     img_train3, gt_train3, weight_train3 = next(self.generator3)
                     img_train4, gt_train4, weight_train4 = next(self.generator4)
                     # self.train_order.append(order)
                     if i % saveStep == 0:
-                        _, out1, c1, _, out2, c2, _, out3, c3, _, out4, c4, summary = self.Session.run([self.train_rmsprop1, self.output1, self.loss1, self.train_rmsprop2, self.output2, self.loss2, self.train_rmsprop3, self.output3, self.loss3, self.train_rmsprop4, self.output4, self.loss4, self.train_op],feed_dict={self.img1: img_train1, self.gtMaps1: gt_train1, self.img2: img_train2, self.gtMaps2: gt_train2, self.img3: img_train3, self.gtMaps3: gt_train3, self.img4: img_train4, self.gtMaps4: gt_train4})
+                        _, out1, c1, _, out2, c2, _, out3, c3, _, out4, c4, vox_out, l3D,summary = self.Session.run([self.train_rmsprop1, self.output1, self.loss1, self.train_rmsprop2, self.output2, self.loss2, self.train_rmsprop3, self.output3, self.loss3, self.train_rmsprop4, self.output4, self.loss4, self.prob_vox, self.loss_3D, self.train_op],feed_dict={self.img1: img_train1, self.gtMaps1: gt_train1, self.img2: img_train2, self.gtMaps2: gt_train2, self.img3: img_train3, self.gtMaps3: gt_train3, self.img4: img_train4, self.gtMaps4: gt_train4,self.gtMaps_3D:gt_3D})
                         # Save summary (Loss + Accuracy)
                         self.train_summary.add_summary(summary, epoch * epochSize + i)
                         self.train_summary.flush()
 
                     else:
-                        _, out1, c1, _, out2, c2, _, out3, c3, _, out4, c4 = self.Session.run([self.train_rmsprop1, self.output1, self.loss1, self.train_rmsprop2, self.output2, self.loss2, self.train_rmsprop3, self.output3, self.loss3, self.train_rmsprop4, self.output4, self.loss4],feed_dict={self.img1: img_train1, self.gtMaps1: gt_train1, self.img2: img_train2, self.gtMaps2: gt_train2, self.img3: img_train3, self.gtMaps3: gt_train3, self.img4: img_train4, self.gtMaps4: gt_train4})
+                        _, out1, c1, _, out2, c2, _, out3, c3, _, out4, c4, vox_out, l3D= self.Session.run([self.train_rmsprop1, self.output1, self.loss1, self.train_rmsprop2, self.output2, self.loss2, self.train_rmsprop3, self.output3, self.loss3, self.train_rmsprop4, self.output4, self.loss4, self.prob_vox, self.loss_3D],feed_dict={self.img1: img_train1, self.gtMaps1: gt_train1, self.img2: img_train2, self.gtMaps2: gt_train2, self.img3: img_train3, self.gtMaps3: gt_train3, self.img4: img_train4, self.gtMaps4: gt_train4,self.gtMaps_3D:gt_3D})
+
+
                     # for i in range(self.batchSize):
                     #     scipy.io.savemat('fmap/' + order[i] + '.mat', {'fmap': out[i, self.nStack - 1]})
                     cost1 += c1
@@ -301,6 +337,8 @@ class HourglassModel():
                     avg_cost3 = c3
                     cost4 += c4
                     avg_cost4 = c4
+                    cost3D += l3D
+                    avg_cost3D = l3D
                 epochfinishTime = time.time()
                 # Save Weight (axis = epoch)
                 #
@@ -331,19 +369,20 @@ class HourglassModel():
                 # self.resume['accur'].append(accuracy_pred)
                 # self.resume['err'].append(np.sum(accuracy_array) / len(accuracy_array))
                 for i in range(validIter):
-                    img_valid_1, gt_valid_1, w_valid1 = next(self.valid_gen1)
+                    img_valid_1, gt_valid_1, gt_3D_valid, w_valid1 = next(self.valid_gen1)
                     img_valid_2, gt_valid_2, w_valid2 = next(self.valid_gen2)
                     img_valid_3, gt_valid_3, w_valid3 = next(self.valid_gen3)
                     img_valid_4, gt_valid_4, w_valid4 = next(self.valid_gen4)
                     # self.valid_order.append(order_v)
-                    out_v1, valid_loss1, out_v2, valid_loss2, out_v3, valid_loss3, out_v4, valid_loss4= self.Session.run([self.output1, self.loss1,self.output2, self.loss2,self.output3, self.loss3,self.output4, self.loss4], feed_dict={self.img1: img_valid_1, self.gtMaps1: gt_valid_1,self.img2: img_valid_2, self.gtMaps2: gt_valid_2,self.img3: img_valid_3, self.gtMaps3: gt_valid_3,self.img4: img_valid_4, self.gtMaps4: gt_valid_4})
+                    out_v1, valid_loss1, out_v2, valid_loss2, out_v3, valid_loss3, out_v4, valid_loss4, vox_valid, valid_3d, valid_summary = self.Session.run([self.output1, self.loss1,self.output2, self.loss2,self.output3, self.loss3,self.output4, self.loss4, self.prob_vox, self.loss_3D, self.test_op], feed_dict={self.img1: img_valid_1, self.gtMaps1: gt_valid_1,self.img2: img_valid_2, self.gtMaps2: gt_valid_2,self.img3: img_valid_3, self.gtMaps3: gt_valid_3,self.img4: img_valid_4, self.gtMaps4: gt_valid_4,self.gtMaps_3D:gt_3D_valid})
                     # for i in range(self.batchSize):
                     #     scipy.io.savemat('fmap/' + order_v[i] + '.mat', {'fmap': out[i, self.nStack - 1]})
                     valid_loss1 += np.array(valid_loss1, dtype=np.float32) / validIter
                     valid_loss2 += np.array(valid_loss2, dtype=np.float32) / validIter
                     valid_loss3 += np.array(valid_loss3, dtype=np.float32) / validIter
                     valid_loss4 += np.array(valid_loss4, dtype=np.float32) / validIter
-                    valid_summary = self.Session.run(self.test_op, feed_dict={self.img1: img_valid_1, self.gtMaps1: gt_valid_1,self.img2: img_valid_2, self.gtMaps2: gt_valid_2,self.img3: img_valid_3, self.gtMaps3: gt_valid_3,self.img4: img_valid_4, self.gtMaps4: gt_valid_4})
+                    valid_3d += np.array(valid_3d, dtype=np.float32) / validIter
+                    # valid_summary = self.Session.run(self.test_op, feed_dict={self.img1: img_valid_1, self.gtMaps1: gt_valid_1,self.img2: img_valid_2, self.gtMaps2: gt_valid_2,self.img3: img_valid_3, self.gtMaps3: gt_valid_3,self.img4: img_valid_4, self.gtMaps4: gt_valid_4})
                 #     valid_summary = self.Session.run(self.test_op, feed_dict={self.img: img_valid, self.gtMaps: gt_valid})
                     self.test_summary.add_summary(valid_summary, epoch*validIter+i)
                     self.test_summary.flush()
@@ -386,19 +425,19 @@ class HourglassModel():
             load			: Model to load (None if training from scratch) (see README for further information)
         """
         with tf.name_scope('Session'):
-            for gpu in self.gpu:
-                with tf.device(gpu):
-                    self._init_weight()
-                    print("ok")
-                    self._define_saver_summary()
-                    print("ok")
-                    if load is not None:
-                        self.saver.restore(self.Session, load)
-                    # try:
-                    #	self.saver.restore(self.Session, load)
-                    # except Exception:
-                    #	print('Loading Failed! (Check README file for further information)')
-                    self._train(nEpochs, epochSize, saveStep, validIter=10)
+            # for gpu in self.gpu:
+            with tf.device(self.gpu):
+                self._init_weight()
+                self._define_saver_summary()
+                # with tf.device(self.cpu):
+                #     self.saver = tf.train.Saver()
+                if load is not None:
+                    self.saver.restore(self.Session, load)
+                # try:
+                #	self.saver.restore(self.Session, load)
+                # except Exception:
+                #	print('Loading Failed! (Check README file for further information)')
+                self._train(nEpochs, epochSize, saveStep, validIter=10)
 
     def _accuracy_computation(self):
         """ Computes accuracy tensor
@@ -419,19 +458,20 @@ class HourglassModel():
             with tf.device(self.cpu):
                 self.saver = tf.train.Saver()
             if summary:
-                for gpu in self.gpu:
-                    with tf.device(gpu):
-                        self.train_summary = tf.summary.FileWriter(self.logdir_train, tf.get_default_graph())
-                        # self.train_summary = tf.summary.FileWriter(self.logdir_train, tf.as_graph_def())
-                        self.test_summary = tf.summary.FileWriter(self.logdir_test)
-                        # self.weight_summary = tf.summary.FileWriter(self.logdir_train, tf.get_default_graph())
+                # for gpu in self.gpu:
+                with tf.device(self.gpu):
+                    # self.train_summary = tf.summary.FileWriter(self.logdir_train, tf.get_default_graph())
+                    # self.train_summary = tf.summary.FileWriter(self.logdir_train, tf.as_graph_def())
+                    self.train_summary = tf.summary.FileWriter(self.logdir_train)
+                    self.test_summary = tf.summary.FileWriter(self.logdir_test)
+                    # self.weight_summary = tf.summary.FileWriter(self.logdir_train, tf.get_default_graph())
 
     def _init_weight(self):
         """ Initialize weights
         """
         print('Session initialization')
         # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.3)
-        config = tf.ConfigProto()
+        config = tf.ConfigProto(allow_soft_placement = True)
         config.gpu_options.allow_growth = True
         self.Session = tf.Session(config=config)
         #self.Session = tf.Session()
@@ -446,7 +486,7 @@ class HourglassModel():
         t_start = time.time()
         # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.8)
         # self.Session = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-        config = tf.ConfigProto()
+        config = tf.ConfigProto(allow_soft_placement = True)
         config.gpu_options.allow_growth = True
         self.Session = tf.Session(config=config)
         #self.Session = tf.Session()
@@ -497,12 +537,13 @@ class HourglassModel():
                         out[i] = self._conv(ll[i], self.outDim, 1, 1, 'VALID', 'out')
                         out_[i] = self._conv(out[i], self.nFeat, 1, 1, 'VALID', 'out_')
                         sum_[i] = tf.add_n([out_[i], sum_[i - 1], ll_[0]], name='merge')
-                with tf.name_scope('stage_' + str(self.nStack - 1)):
-                    hg[self.nStack - 1] = self._hourglass(sum_[self.nStack - 2], self.nLow, self.nFeat, 'hourglass')
-                    drop[self.nStack - 1] = tf.layers.dropout(hg[self.nStack - 1], rate=self.dropout_rate,training=self.training, name='dropout')
-                    ll[self.nStack - 1] = self._conv_bn_relu(drop[self.nStack - 1], self.nFeat, 1, 1, 'VALID','conv')
-                    out[self.nStack - 1] = self._conv(ll[self.nStack - 1], self.outDim, 1, 1, 'VALID', 'out')
-                    return tf.stack(out, axis=1, name='final_output')
+                if self.nStack > 1:
+                    with tf.name_scope('stage_' + str(self.nStack - 1)):
+                        hg[self.nStack - 1] = self._hourglass(sum_[self.nStack - 2], self.nLow, self.nFeat, 'hourglass')
+                        drop[self.nStack - 1] = tf.layers.dropout(hg[self.nStack - 1], rate=self.dropout_rate,training=self.training, name='dropout')
+                        ll[self.nStack - 1] = self._conv_bn_relu(drop[self.nStack - 1], self.nFeat, 1, 1, 'VALID','conv')
+                        out[self.nStack - 1] = self._conv(ll[self.nStack - 1], self.outDim, 1, 1, 'VALID', 'out')
+                return tf.stack(out, axis=1, name='final_output')
 
     def _conv(self, inputs, filters, kernel_size=1, strides=1, pad='VALID', name='conv'):
         """ Spatial Convolution (CONV2D)
@@ -662,8 +703,9 @@ class HourglassModel():
 
 
 
-    def proj_splat(self, feats, Rcam, f, c, k, p):
+    def proj_splat(self, feats, R, T, f, c, k, p):
         # KRcam = tf.matmul(K, Rcam)
+        Rcam = np.array([[R[0],R[1],R[2],T[0]],[R[3],R[4],R[5],T[1]],[R[6],R[7],R[8],T[2]],[0,0,0,1]])
         with tf.variable_scope('ProjSplat'):
             nR, fh, fw, fdim = feats.get_shape().as_list()
             rsz_h = float(fh) / 256
@@ -671,7 +713,7 @@ class HourglassModel():
 
             # Create voxel grid
             with tf.name_scope('GridCenters'):
-                grid_range = tf.range(0,64)
+                grid_range = tf.range(0,64,dtype=tf.float32)
                 self.grid = tf.stack(tf.meshgrid(grid_range, grid_range, grid_range))
                 self.rs_grid = tf.reshape(self.grid, [3, -1])
                 nV = self.rs_grid.get_shape().as_list()[1]
@@ -679,6 +721,7 @@ class HourglassModel():
 
             # Project grid
             with tf.name_scope('World2Cam'):
+                Rcam = tf.cast(Rcam,'float32')
                 p_cam = tf.matmul(Rcam, self.rs_grid)
                 x_cam, y_cam, z_cam = p_cam[0,:], p_cam[1,:], p_cam[2,:]
                 x_cam = x_cam / z_cam
@@ -707,14 +750,19 @@ class HourglassModel():
                 im_x0_f, im_x1_f = tf.to_float(im_x0), tf.to_float(im_x1)
                 im_y0_f, im_y1_f = tf.to_float(im_y0), tf.to_float(im_y1)
 
-                ind_grid = tf.range(0, nR)
-                ind_grid = tf.expand_dims(ind_grid, 1)
-                im_ind = tf.tile(ind_grid, [1, nV])
+                # ind_grid = tf.range(0, nR)
+                # ind_grid = tf.expand_dims(ind_grid, 1)
+                # im_ind = tf.tile(ind_grid, [1,nV])
 
                 def _get_gather_inds(x, y):
-                    return tf.reshape(tf.stack([im_ind, y, x], axis=2), [-1, 3])
+                    # x = tf.expand_dims(x,0)
+                    # x = tf.tile(x,[nR,1])
+                    # y = tf.expand_dims(y,0)
+                    # y = tf.tile(y,[nR,1])
+                    return tf.reshape(tf.stack([y, x], axis=1), [-1, 2])
 
                 # Gather  values
+                feats = tf.transpose(feats,[1,2,3,0])
                 Ia = tf.gather_nd(feats, _get_gather_inds(im_x0, im_y0))
                 Ib = tf.gather_nd(feats, _get_gather_inds(im_x0, im_y1))
                 Ic = tf.gather_nd(feats, _get_gather_inds(im_x1, im_y0))
@@ -727,15 +775,151 @@ class HourglassModel():
                 wd = (im_x - im_x0_f) * (im_y - im_y0_f)
                 wa, wb = tf.reshape(wa, [-1, 1]), tf.reshape(wb, [-1, 1])
                 wc, wd = tf.reshape(wc, [-1, 1]), tf.reshape(wd, [-1, 1])
+                wa = tf.expand_dims(wa,2)
+                wb = tf.expand_dims(wb,2)
+                wc = tf.expand_dims(wc,2)
+                wd = tf.expand_dims(wd,2)
+                wa = tf.tile(wa, [1, fdim, self.batchSize])
+                wb = tf.tile(wb, [1, fdim, self.batchSize])
+                wc = tf.tile(wc, [1, fdim, self.batchSize])
+                wd = tf.tile(wd, [1, fdim, self.batchSize])
                 self.wa, self.wb, self.wc, self.wd = wa, wb, wc, wd
                 self.Ia, self.Ib, self.Ic, self.Id = Ia, Ib, Ic, Id
                 Ibilin = tf.add_n([wa * Ia, wb * Ib, wc * Ic, wd * Id])
-
+                Ibilin = tf.transpose(Ibilin,[2,0,1])
+                Ibilin = tf.reshape(Ibilin,[-1,fdim])
             with tf.name_scope('AppendDepth'):
                 # Concatenate depth value along ray to feature
+                self.im_z = tf.tile(self.im_z,[self.batchSize])
                 Ibilin = tf.concat(
-                    [Ibilin, tf.reshape(self.im_z, [nV * nR, 1])], axis=1)
+                    [Ibilin, tf.reshape(self.im_z, [nV * self.batchSize, 1])], axis=1)
                 fdim = Ibilin.get_shape().as_list()[-1]
-                self.Ibilin = tf.reshape(Ibilin, [self.batch_size, 64,64,64,fdim])
-                self.Ibilin = tf.transpose(self.Ibilin, [0, 1, 3, 2, 4, 5])
+                self.Ibilin = tf.reshape(Ibilin, [self.batchSize, 64,64,64,fdim])
+                self.Ibilin = tf.transpose(self.Ibilin, [0, 2, 3, 1, 4])
         return self.Ibilin
+
+
+    def convgru(self,grid, kernel=[3, 3, 3], filters=14):
+        bs, im_bs, h, w, d, ch = grid.get_shape().as_list()
+
+        conv_gru = ConvGRUCell(
+            shape=[h, w, d],
+            initializer=slim.initializers.xavier_initializer(),
+            kernel=kernel,
+            filters=filters)
+        seq_length = [im_bs for _ in range(bs)]
+        outputs, states = tf.nn.dynamic_rnn(
+            conv_gru,
+            grid,
+            parallel_iterations=64,
+            sequence_length=seq_length,
+            dtype=tf.float32,
+            time_major=False)
+        return outputs, states
+
+
+    def convlstm(self,grid, kernel=[3, 3, 3], filters=14):
+        bs, im_bs, h, w, d, ch = grid.get_shape().as_list()
+
+        conv_lstm = ConvLSTMCell(
+            shape=[h, w, d],
+            initializer=slim.initializers.xavier_initializer(),
+            kernel=kernel,
+            filters=filters)
+        seq_length = [im_bs for _ in range(bs)]
+        outputs, states = tf.nn.dynamic_rnn(
+            conv_lstm,
+            grid,
+            parallel_iterations=64,
+            sequence_length=seq_length,
+            dtype=tf.float32,
+            time_major=False)
+        return outputs, states
+
+
+    conv_rnns = {'gru': convgru, 'lstm': convlstm}
+
+    def grid_unet64(self, cost_vol):
+        n, h, w, d, ch = cost_vol.get_shape().as_list()
+        self.grid_net = {}
+        with tf.variable_scope('Grid_Unet'):
+            conv1 = self.conv3d('conv1',cost_vol,4,32,activation=None,norm='BN',mode='TRAIN')
+            self.grid_net['conv1'] = conv1
+            conv2 = self.conv3d('conv2', conv1, 4, 64, norm='BN', mode='TRAIN')
+            self.grid_net['conv2'] = conv2
+            conv3 = self.conv3d('conv3', conv2, 4, 128, norm='BN', mode='TRAIN')
+            self.grid_net['conv3'] = conv3
+            conv4 = self.conv3d('conv4', conv3, 4, 256, norm='BN', mode='TRAIN')
+            self.grid_net['conv4'] = conv4
+            deconv1 = self.deconv3d('deconv1', conv4, 4, 128, norm='BN', mode='TRAIN')
+            self.grid_net['deconv1'] = deconv1
+            deconv1 = tf.concat([deconv1, conv3], axis=4)
+            deconv2 = self.deconv3d('deconv2', deconv1, 4, 64, norm='BN', mode='TRAIN')
+            self.grid_net['deconv2'] = deconv2
+            deconv2 = tf.concat([deconv2, conv2], axis=4)
+            deconv3 = self.deconv3d('deconv3', deconv2, 4, 32, norm='BN', mode='TRAIN')
+            self.grid_net['deconv3'] = deconv3
+            deconv3 = tf.concat([deconv3, conv1], axis=4)
+            deconv4 = self.deconv3d('deconv4', deconv3, 4, 32, norm='BN', mode='TRAIN')
+            self.grid_net['deconv4'] = deconv4
+            final_vol = self.deconv3d('out', deconv4, 4, 14, stride=1, norm=None, mode='TRAIN')
+            self.grid_net['out'] = final_vol
+
+        return final_vol
+
+    def conv3d(self,name,X,fsize,ch,stride=2,norm=None,padding="SAME",activation=tf.nn.relu,mode="TRAIN"):
+        bs, h, w, d, in_ch = X.get_shape().as_list()
+        filt_shape = [fsize, fsize, fsize, in_ch, ch]
+        stride = [1, stride, stride, stride, 1]
+        with tf.variable_scope(name):
+            if activation is not None:
+                X = activation(X)
+            params = tf.get_variable(name='weights',shape=filt_shape,initializer=slim.initializers.xavier_initializer())
+            # params = get_weights(filt_shape)
+            X = tf.nn.conv3d(X, params, stride, padding)
+            if norm is None:
+                bias_dim = [filt_shape[-1]]
+                X = tf.nn.bias_add(X, tf.get_variable(name='bias',shape=bias_dim,initializer=tf.constant_initializer(0.0)))
+            elif norm == 'BN':
+                is_training = (True if mode == "TRAIN" else False)
+                X = slim.batch_norm(
+                    X, is_training=is_training, updates_collections=None)
+            # elif norm == 'IN':
+            #     X = instance_norm(X)
+            else:
+                print('Invalid normalization! Choose from {None, BN, IN}')
+
+        return X
+
+    def deconv3d(self,name,X,fsize,ch,stride=2,norm=None,padding="SAME",activation=tf.nn.relu,mode="TRAIN"):
+        bs, h, w, d, in_ch = X.get_shape().as_list()
+        filt_shape = [fsize, fsize, fsize, ch, in_ch]
+        out_shape = [bs, h * stride, w * stride, d * stride, ch]
+        stride = [1, stride, stride, stride, 1]
+        with tf.variable_scope(name):
+            if activation is not None:
+                X = activation(X)
+            params = tf.get_variable(name='weights', shape=filt_shape,initializer=slim.initializers.xavier_initializer())
+            # params = get_weights(filt_shape)
+            X = tf.nn.conv3d_transpose(X, params, out_shape, stride, padding)
+            if norm is None:
+                bias_dim = [filt_shape[-2]]
+                X = tf.nn.bias_add(X, tf.get_variable(name='bias',shape=bias_dim,initializer=tf.constant_initializer(0.0)))
+            elif norm == 'BN':
+                is_training = (True if mode == "TRAIN" else False)
+                X = slim.batch_norm(
+                    X, is_training=is_training, updates_collections=None)
+            # elif norm == 'IN':
+            #     X = instance_norm(X)
+            else:
+                print('Invalid normalization! Choose from {None, BN, IN}')
+
+        return X
+
+    def collapse_dims(self,T):
+        shape = T.get_shape().as_list()
+        return tf.reshape(T, [-1] + shape[2:])
+
+    def uncollapse_dims(self,T, s1, s2):
+        shape = T.get_shape().as_list()
+        return tf.reshape(T, [s1, s2] + shape[1:])
