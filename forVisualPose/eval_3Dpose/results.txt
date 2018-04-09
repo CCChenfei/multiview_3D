@@ -22,3 +22,19 @@
 17-Jan-2018 13:43:52  S11 
      Motion &   Directions &   Discussion &       Eating &     Greeting &      Phoning &        Photo &       Posing &    Purchases &      Sitting &  SittingDown &      Smoking &      Waiting &      WalkDog &      Walking & WalkTogether &      Average\\
       Final &        47.56 &        49.02 &        46.65 &        49.35 &        52.09 &        50.44 &        50.55 &        52.94 &        47.25 &        48.46 &        47.71 &        45.47 &        47.81 &        51.02 &        47.56 &        49.00 \\
+
+05-Mar-2018 11:27:19  S9   S11 
+     Motion &   Directions &   Discussion &       Eating &     Greeting &      Phoning &       Posing &    Purchases &      Sitting &  SittingDown &        Photo &      Smoking &      Waiting &      WalkDog &      Walking & WalkTogether &      Average\\
+      Final &       118.15 &       162.55 &       146.93 &       137.24 &       165.92 &       114.66 &       143.24 &       190.75 &       244.52 &       152.22 &       197.66 &       139.49 &       123.30 &       188.03 &       132.13 &       158.56 \\
+
+21-Mar-2018 18:48:29  S9   S11 
+     Motion &   Directions &   Discussion &       Eating &     Greeting &      Phoning &       Posing &    Purchases &      Sitting &  SittingDown &        Photo &      Smoking &      Waiting &      WalkDog &      Walking & WalkTogether &      Average\\
+      Final &        86.46 &       135.63 &       115.10 &       102.16 &       134.25 &        91.42 &       119.72 &       163.34 &       217.80 &       122.29 &       176.65 &       108.41 &        76.29 &       162.61 &        84.78 &       128.34 \\
+
+23-Mar-2018 22:57:50  S9   S11 
+     Motion &   Directions &   Discussion &       Eating &     Greeting &      Phoning &       Posing &    Purchases &      Sitting &  SittingDown &        Photo &      Smoking &      Waiting &      WalkDog &      Walking & WalkTogether &      Average\\
+      Final &        86.46 &       135.63 &       115.10 &       102.16 &       134.25 &        91.42 &       119.72 &       163.34 &       217.80 &       122.29 &       176.65 &       108.41 &        76.29 &       162.61 &        84.78 &       128.34 \\
+
+28-Mar-2018 19:34:43  S9   S11 
+     Motion &   Directions &   Discussion &       Eating &     Greeting &      Phoning &       Posing &    Purchases &      Sitting &  SittingDown &        Photo &      Smoking &      Waiting &      WalkDog &      Walking & WalkTogether &      Average\\
+      Final &        86.46 &       135.63 &       115.10 &       102.16 &       134.25 &        91.42 &       119.72 &       163.34 &       217.80 &       122.29 &       176.65 &       108.41 &        76.29 &       162.61 &        84.78 &       128.34 \\

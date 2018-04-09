@@ -120,7 +120,7 @@ class DataGenerator():
             for line in input_file:
                 line = line.strip()
                 #line = line.split(' ')
-                line = re.split(' |,',line)
+                line = re.splitskew+1(' |,',line)
                 name = line[0]
                 joints = list(map(float, line[1:35]))
                 #joints = list(line[1:])
